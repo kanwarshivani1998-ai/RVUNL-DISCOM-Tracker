@@ -146,3 +146,40 @@ export const SYLLABUS: Subject[] = [
     ],
   },
 ];
+
+export interface TopicRef { subject: Subject; unit: Unit; topic: Topic; }
+
+export function getAllTopics(): TopicRef[] {
+  const out: TopicRef[] = [];
+  for (const subject of SYLLABUS) {
+    for (const unit of subject.units) {
+      for (const topic of unit.topics) {
+        out.push({ subject, unit, topic });
+      }
+    }
+  }
+  return out;
+}
+
+export function findSubject(id: string) { return SYLLABUS.find((s) => s.id === id); }
+export function findUnit(subjectId: string, unitId: string) {
+  return findSubject(subjectId)?.units.find((u) => u.id === unitId);
+}
+export function findTopic(topicId: string): TopicRef | undefined {
+  return getAllTopics().find((r) => r.topic.id === topicId);
+}
+
+export const HINDI_QUOTES = [
+  "सफलता उन्हीं को मिलती है जो कड़ी मेहनत करते हैं।",
+  "आज का अभ्यास कल की सफलता है।",
+  "छोटे-छोटे कदम भी बड़ी मंज़िल तक ले जाते हैं।",
+  "मेहनत का कोई विकल्प नहीं है।",
+  "हर दिन एक नई शुरुआत है — आगे बढ़ो।",
+  "जो पढ़ता है वही आगे बढ़ता है।",
+  "कठिन परिश्रम ही सबसे बड़ा शॉर्टकट है।",
+  "अपने सपनों को कभी छोटा मत समझो।",
+  "आत्मविश्वास ही सफलता की कुंजी है।",
+  "जीत उसी की होती है जो हार नहीं मानता।",
+  "पढ़ाई वो हथियार है जिससे आप दुनिया बदल सकते हैं।",
+  "आज की मेहनत, कल का सुनहरा भविष्य।",
+];
