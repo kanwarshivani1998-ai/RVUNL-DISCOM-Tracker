@@ -1,0 +1,320 @@
+import React, { useEffect, useState } from 'react';
+import { supabase } from '@/lib/content/supabaseClient';
+import { getCachedMCQ, putCachedMCQ } from '@/lib/db/db';
+import { recordMcqAttempt } from '@/lib/mcq/mcqStats';
+import { syncWrongAnswerBank } from '@/lib/mcq/wrongAnswerBank';
+
+interface Question {
+  id: string;
+  question_text: string;
+  options: string[];
+  correct_option: number;
+  explanation?: string;
+}
+
+// localStorage me progress save karne ki key har topic ke liye alag
+const getStorageKey = (topicId: string) => `mcq_progress_${topicId}`;
+
+interface SavedProgress {
+  currentIndex: number;
+  selectedAnswers: { [key: number]: number };
+  isSubmitted: boolean;
+  filterMode: 'all' | 'wrong' | 'correct';
+}
+
+export default function MCQTest({ topicId }: { topicId: string }) {
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [selectedAnswers, setSelectedAnswers] = useState<{ [key: number]: number }>({});
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [restored, setRestored] = useState(false);
+  
+  // Filter State: 'all' | 'wrong' | 'correct'
+  const [filterMode, setFilterMode] = useState<'all' | 'wrong' | 'correct'>('all');
+
+  useEffect(() => {
+    async function fetchQuestions() {
+      setLoading(true);
+
+      // Pehle phone ke local cache (IndexedDB) me dekho — agar pehle se sync ho chuka hai
+      // to yahi se turant mil jayega, Supabase ko call karne ki zaroorat hi nahi.
+      const cached = await getCachedMCQ(topicId);
+      if (cached && cached.length > 0) {
+        setQuestions(cached);
+        setLoading(false);
+        return;
+      }
+
+      // Cache me nahi mila (naya topic ya abhi tak sync nahi hua) — tabhi Supabase call karo,
+      // aur jo mile use aage ke liye local me bhi save kar do.
+      if (!supabase) {
+        setLoading(false);
+        return;
+      }
+      const { data, error } = await supabase
+        .from('mcq_questions')
+        .select('id, question_text, options, correct_option, explanation')
+        .eq('topic_id', topicId);
+
+      if (!error && data) {
+        setQuestions(data);
+        putCachedMCQ(topicId, data).catch(() => {
+          // local save fail ho jaye to bhi test dikhna chahiye
+        });
+      }
+      setLoading(false);
+    }
+    fetchQuestions();
+
+    // Pichla saved progress isi topic ke liye restore karna (agar hai to)
+    try {
+      const saved = localStorage.getItem(getStorageKey(topicId));
+      if (saved) {
+        const parsed: SavedProgress = JSON.parse(saved);
+        setCurrentIndex(parsed.currentIndex ?? 0);
+        setSelectedAnswers(parsed.selectedAnswers ?? {});
+        setIsSubmitted(parsed.isSubmitted ?? false);
+        setFilterMode(parsed.filterMode ?? 'all');
+      } else {
+        // Naya topic hai to fresh state se shuru karo
+        setCurrentIndex(0);
+        setSelectedAnswers({});
+        setIsSubmitted(false);
+        setFilterMode('all');
+      }
+    } catch {
+      // localStorage corrupt/unavailable ho to bhi test chalna chahiye
+    }
+    setRestored(true);
+  }, [topicId]);
+
+  // Jab bhi progress badle, use turant localStorage me save kar do
+  useEffect(() => {
+    if (!restored) return; // pehle restore ho jaane do, warna default state save ho jayega
+    try {
+      const progress: SavedProgress = { currentIndex, selectedAnswers, isSubmitted, filterMode };
+      localStorage.setItem(getStorageKey(topicId), JSON.stringify(progress));
+    } catch {
+      // storage full/unavailable — ignore, silently fail
+    }
+  }, [topicId, restored, currentIndex, selectedAnswers, isSubmitted, filterMode]);
+
+  const handleOptionSelect = (optionIndex: number) => {
+    if (isSubmitted) return;
+    setSelectedAnswers({
+      ...selectedAnswers,
+      [currentIndex]: optionIndex,
+    });
+  };
+
+  // Test ko fresh restart karne ke liye (naya button neeche add kiya hai)
+  const handleRestartTest = () => {
+    setCurrentIndex(0);
+    setSelectedAnswers({});
+    setIsSubmitted(false);
+    setFilterMode('all');
+    try {
+      localStorage.removeItem(getStorageKey(topicId));
+    } catch {
+      // ignore
+    }
+  };
+
+  // Galat aur Sahi questions ke index nikalna
+  const wrongIndices = questions
+    .map((q, idx) => (selectedAnswers[idx] !== undefined && selectedAnswers[idx] !== q.correct_option ? idx : -1))
+    .filter((idx) => idx !== -1);
+
+  const correctIndices = questions
+    .map((q, idx) => (selectedAnswers[idx] === q.correct_option ? idx : -1))
+    .filter((idx) => idx !== -1);
+
+  // Active filter ke hisab se index list select karna
+  let activeIndices = questions.map((_, idx) => idx);
+  if (isSubmitted && filterMode === 'wrong') activeIndices = wrongIndices;
+  if (isSubmitted && filterMode === 'correct') activeIndices = correctIndices;
+
+  const calculateScore = () => correctIndices.length;
+
+  // Test submit hone par: (1) performance stats record karo (weak-topic auto-detection
+  // aur readiness score ke liye), (2) galat kiye gaye sawaal wrong-answer bank me daalo
+  // (jo sahi kiye ho unhe bank se hata do agar pehle wahan the).
+  const handleSubmit = async () => {
+    setIsSubmitted(true);
+    try {
+      await recordMcqAttempt(topicId, correctIndices.length, questions.length);
+      await syncWrongAnswerBank(topicId, questions, selectedAnswers);
+    } catch {
+      // stats/bank save fail ho jaaye to bhi result dikhna chahiye
+    }
+  };
+
+  if (loading) return <div className="p-4 text-center text-sm text-stone-400">Questions Load Ho Rahe Hain...</div>;
+  if (questions.length === 0) return <div className="p-4 text-center text-sm text-stone-400">Is topic ke test questions abhi add nahi hue hain.</div>;
+
+  const actualIndex = activeIndices[currentIndex] ?? 0;
+  const currentQ = questions[actualIndex];
+  const userAns = selectedAnswers[actualIndex];
+  const isCorrectAns = userAns === currentQ?.correct_option;
+
+  // Ganit (Math) topics ke liye: option choose karte hi turant sahi jawab + explanation
+  // dikha do, poore test ke Submit ka wait na karna pade. Baaki topics me jaisa tha waisa hi.
+  const isMathTopic = topicId.startsWith('reason-math');
+  const showAnswerNow = isSubmitted || (isMathTopic && userAns !== undefined);
+
+  return (
+    <div className="bg-stone-950 p-4 rounded-xl border border-stone-800 text-stone-100 mt-2">
+      
+      {/* Header */}
+      <div className="flex justify-between items-center border-b border-stone-800 pb-2 mb-3">
+        <h4 className="text-sm font-bold text-amber-400">MCQ Practice Test</h4>
+        <div className="flex items-center gap-2">
+          <span className="text-xs bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded font-mono">
+            Q {currentIndex + 1} / {activeIndices.length}
+          </span>
+          <button
+            onClick={handleRestartTest}
+            title="Test ko 1 se dobara shuru karein"
+            className="text-[10px] px-2 py-0.5 rounded border border-stone-700 text-stone-400 hover:text-rose-300 hover:border-rose-500/50"
+          >
+            ↺ Restart
+          </button>
+        </div>
+      </div>
+
+      {/* Result Scoreboard & Filter Tabs (Test Submit Hone Ke Baad) */}
+      {isSubmitted && (
+        <div className="bg-stone-900 border border-stone-800 p-3 rounded-xl mb-4 space-y-3">
+          <div className="text-center">
+            <h5 className="text-base font-bold text-emerald-400">Test Completed! 🎉</h5>
+            <p className="text-xs text-stone-300 mt-0.5">
+              Aapka Score: <span className="text-amber-400 font-bold">{calculateScore()}</span> / {questions.length} | 
+              <span className="text-rose-400 font-bold ml-1.5">{wrongIndices.length} Galat</span>
+            </p>
+          </div>
+
+          {/* Filters: Sabhi / Galat / Sahi */}
+          <div className="flex gap-1.5 justify-center pt-1 border-t border-stone-800 text-xs">
+            <button
+              onClick={() => { setFilterMode('all'); setCurrentIndex(0); }}
+              className={`px-2.5 py-1 rounded-lg border font-medium ${filterMode === 'all' ? 'bg-amber-600 border-amber-500 text-white' : 'bg-stone-950 border-stone-800 text-stone-400'}`}
+            >
+              Sabhi ({questions.length})
+            </button>
+            <button
+              onClick={() => { setFilterMode('wrong'); setCurrentIndex(0); }}
+              className={`px-2.5 py-1 rounded-lg border font-medium ${filterMode === 'wrong' ? 'bg-rose-600 border-rose-500 text-white' : 'bg-stone-950 border-stone-800 text-stone-400'}`}
+            >
+              ❌ Galat ({wrongIndices.length})
+            </button>
+            <button
+              onClick={() => { setFilterMode('correct'); setCurrentIndex(0); }}
+              className={`px-2.5 py-1 rounded-lg border font-medium ${filterMode === 'correct' ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-stone-950 border-stone-800 text-stone-400'}`}
+            >
+              ✅ Sahi ({correctIndices.length})
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Question Section */}
+      {activeIndices.length > 0 ? (
+        <div className="mb-4">
+          <p className="text-stone-100 font-medium text-sm sm:text-base mb-3 leading-relaxed">
+            {actualIndex + 1}. {currentQ.question_text}
+          </p>
+
+          {/* Options */}
+          <div className="space-y-2">
+            {currentQ.options.map((opt, optIdx) => {
+              const isSelected = userAns === optIdx;
+              const isCorrect = currentQ.correct_option === optIdx;
+
+              let btnStyle = "w-full text-left p-2.5 rounded-lg border text-xs sm:text-sm font-medium transition-all ";
+
+              if (showAnswerNow) {
+                if (isCorrect) {
+                  btnStyle += "bg-emerald-900/60 border-emerald-500 text-emerald-200 font-bold";
+                } else if (isSelected && !isCorrect) {
+                  btnStyle += "bg-rose-900/60 border-rose-500 text-rose-200";
+                } else {
+                  btnStyle += "bg-stone-900 border-stone-800 text-stone-500";
+                }
+              } else {
+                if (isSelected) {
+                  btnStyle += "bg-amber-600 border-amber-500 text-white shadow-sm";
+                } else {
+                  btnStyle += "bg-stone-900 hover:bg-stone-800 border-stone-800 text-stone-300";
+                }
+              }
+
+              return (
+                <button key={optIdx} onClick={() => handleOptionSelect(optIdx)} className={btnStyle}>
+                  {String.fromCharCode(65 + optIdx)}. {opt}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Explanation Box (Submit Ke Baad Dikhne Wala Part) */}
+          {showAnswerNow && (
+            <div className="mt-4 p-3 rounded-lg border border-stone-800 bg-stone-900/80 space-y-2 text-xs sm:text-sm">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-stone-400">Status:</span>
+                {userAns === undefined ? (
+                  <span className="text-stone-400 font-semibold">Not Attempted (छोड़ा गया)</span>
+                ) : isCorrectAns ? (
+                  <span className="text-emerald-400 font-bold">✓ Sahi Uttar</span>
+                ) : (
+                  <span className="text-rose-400 font-bold">✗ Galat Uttar</span>
+                )}
+              </div>
+
+              <p className="text-emerald-300 font-medium">
+                <span className="font-bold text-stone-400">Sahi Option:</span> {String.fromCharCode(65 + currentQ.correct_option)}. {currentQ.options[currentQ.correct_option]}
+              </p>
+
+              {currentQ.explanation && (
+                <div className="mt-2 pt-2 border-t border-stone-800 text-stone-300">
+                  <span className="font-bold text-amber-400 block mb-1">💡 व्याख्या / Vivran:</span>
+                  <p className="leading-relaxed text-stone-300">{currentQ.explanation}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="p-4 text-center text-xs text-stone-400">Is filter mein koi questions nahi hain.</div>
+      )}
+
+      {/* Navigation Footer */}
+      <div className="flex justify-between items-center border-t border-stone-800 pt-3">
+        <button
+          disabled={currentIndex === 0}
+          onClick={() => setCurrentIndex(currentIndex - 1)}
+          className="px-3 py-1.5 bg-stone-800 text-stone-300 text-xs rounded-lg disabled:opacity-40"
+        >
+          Previous
+        </button>
+
+        {!isSubmitted && currentIndex === questions.length - 1 ? (
+          <button
+            onClick={handleSubmit}
+            className="px-4 py-1.5 bg-emerald-600 text-white font-bold text-xs rounded-lg hover:bg-emerald-700"
+          >
+            Submit Test
+          </button>
+        ) : (
+          <button
+            disabled={currentIndex === activeIndices.length - 1}
+            onClick={() => setCurrentIndex(currentIndex + 1)}
+            className="px-3 py-1.5 bg-amber-600 text-white text-xs rounded-lg disabled:opacity-40"
+          >
+            Next
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
