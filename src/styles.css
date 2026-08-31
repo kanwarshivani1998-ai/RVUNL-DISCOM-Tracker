@@ -127,15 +127,6 @@
   --ring: oklch(0.55 0.1 250);
 }
 
-  --easy: oklch(0.72 0.16 150);
-  --medium: oklch(0.78 0.15 75);
-  --hard: oklch(0.68 0.2 25);
-
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 12%);
-  --ring: oklch(0.75 0.17 55);
-}
-
 @layer base {
   * { border-color: var(--color-border); }
   html, body { -webkit-tap-highlight-color: transparent; }
