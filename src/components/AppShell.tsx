@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { BottomNav } from "./BottomNav";
 import { Link, useRouter } from "@tanstack/react-router";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, Zap } from "lucide-react";
 
 interface AppShellProps {
   title: string;
@@ -26,8 +26,8 @@ export function AppShell({ title, subtitle, back, action, children }: AppShellPr
               <ChevronLeft className="h-5 w-5" />
             </button>
           ) : (
-            <Link to="/" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl gradient-primary text-sm font-black">
-              JA
+            <Link to="/" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl gradient-primary">
+              <Zap className="h-5 w-5" style={{ color: "var(--color-accent)" }} />
             </Link>
           )}
           <div className="min-w-0 flex-1">
