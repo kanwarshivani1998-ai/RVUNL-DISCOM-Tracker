@@ -24,7 +24,7 @@ function ExamSyllabusPage() {
     <AppShell title="सिलेबस" subtitle={EXAM_SCHEME_META.examName}>
       {/* Board + exam header */}
       <section className="card-surface relative overflow-hidden p-5">
-        <div className="absolute -right-8 -top-10 h-40 w-40 rounded-full opacity-20 gradient-primary" />
+        <div className="absolute inset-x-0 top-0 h-1 gradient-primary" />
         <div className="relative space-y-1">
           <div className="flex items-center gap-2">
             <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg gradient-primary">

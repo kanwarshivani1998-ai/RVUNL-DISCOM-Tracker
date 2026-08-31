@@ -63,7 +63,7 @@ function Dashboard() {
         initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
         className="card-surface relative overflow-hidden p-5"
       >
-        <div className="absolute -right-8 -top-10 h-40 w-40 rounded-full opacity-20 gradient-primary" />
+        <div className="absolute inset-x-0 top-0 h-1 gradient-primary" />
         <div className="relative grid grid-cols-[auto_1fr] items-center gap-4">
           <CircularProgress value={pct} label="कुल प्रगति" size={132} stroke={12} />
           <div className="min-w-0 space-y-2">
