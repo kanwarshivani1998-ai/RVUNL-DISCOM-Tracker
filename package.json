@@ -15,6 +15,7 @@
   "dependencies": {
     "@capacitor/android": "^7.4.0",
     "@capacitor/core": "^7.4.0",
+    "@capacitor/screen-orientation": "^7.0.4",
     "@capacitor/filesystem": "^7.1.4",
     "@capacitor/local-notifications": "^7.0.3",
     "@m430/capacitor-app-install": "^0.0.3",
