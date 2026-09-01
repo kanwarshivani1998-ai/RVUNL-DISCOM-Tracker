@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { Flame, Trophy, Target, Calendar, CalendarClock, Repeat, BookMarked, Zap, ChevronRight, ListChecks } from "lucide-react";
+import { Flame, Trophy, Target, Calendar, CalendarClock, Repeat, BookMarked, Zap, ChevronRight, ListChecks, Keyboard } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { CircularProgress } from "@/components/CircularProgress";
 import { useData } from "@/lib/db/DataContext";
@@ -112,6 +112,7 @@ function Dashboard() {
 
       {/* Quick links */}
       <section className="mt-3 space-y-2">
+        <QuickLink to="/typing" icon={Keyboard} label="टाइपिंग मास्टर" hint="OTG कीबोर्ड प्रैक्टिस — Gross/Net WPM व Accuracy" />
         <QuickLink to="/mock-test" icon={ListChecks} label="मॉक टेस्ट (सभी विषय)" hint="25 / 50 / 100 सवाल, नेगेटिव मार्किंग सहित" />
         <QuickLink to="/schedule" icon={CalendarClock} label="डेली स्टडी शेड्यूल" hint="5 घंटे टाइम-टेबल" />
         <QuickLink to="/revision" icon={Repeat} label="रिवीजन बकाया" hint={`${revisionDue} टॉपिक्स`} />
