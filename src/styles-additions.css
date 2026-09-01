@@ -1,0 +1,46 @@
+/* === Typing Master additions — append to src/styles.css === */
+
+@keyframes kb-key-tap {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(4px); }
+  100% { transform: translateY(0); }
+}
+
+@keyframes kb-finger-tap {
+  0% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(5px) scale(0.94); }
+  100% { transform: translateY(0) scale(1); }
+}
+
+@keyframes kb-shake-anim {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(3px); }
+}
+
+.kb-key-tap { animation: kb-key-tap 0.16s ease; transform-origin: center; }
+.kb-tap { animation: kb-finger-tap 0.16s ease; transform-origin: center; }
+.kb-shake { animation: kb-shake-anim 0.28s ease; transform-origin: center; }
+
+/* Portrait fallback for the Typing Master screen (web testing).
+   On native we lock orientation via @capacitor/screen-orientation instead,
+   but this CSS guard still helps if the lock hasn't taken effect yet. */
+.rotate-hint {
+  display: none;
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 2rem;
+  background-color: var(--color-background);
+}
+
+@media (orientation: portrait) {
+  .rotate-hint { display: flex; }
+  .typing-content { visibility: hidden; }
+}
